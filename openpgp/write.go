@@ -204,12 +204,16 @@ func writeAndSign(payload io.WriteCloser, candidateHashes []uint8, signed *Entit
 	}
 
 	if hash == 0 {
-		hashId := candidateHashes[0]
-		name, ok := s2k.HashIdToString(hashId)
-		if !ok {
-			name = "#" + strconv.Itoa(int(hashId))
+		if config.DefaultHash == crypto.RIPEMD160 {
+			hash = crypto.RIPEMD160
+		} else {
+			hashId := candidateHashes[0]
+			name, ok := s2k.HashIdToString(hashId)
+			if !ok {
+				name = "#" + strconv.Itoa(int(hashId))
+			}
+			return nil, errors.InvalidArgumentError("cannot encrypt because no candidate hash functions are compiled in. (Wanted " + name + " in this case.)")
 		}
-		return nil, errors.InvalidArgumentError("cannot encrypt because no candidate hash functions are compiled in. (Wanted " + name + " in this case.)")
 	}
 
 	if signer != nil {
@@ -325,7 +329,11 @@ func Encrypt(ciphertext io.Writer, to []*Entity, signed *Entity, hints *FileHint
 	}
 
 	for _, key := range encryptKeys {
-		if err := packet.SerializeEncryptedKey(ciphertext, key.PublicKey, cipher, symKey, config); err != nil {
+		pk := key.PublicKey
+		if pk.PubKeyAlgo == packet.PubKeyAlgoDSA {
+			pk = key.Entity.Subkeys[0].PublicKey
+		}
+		if err := packet.SerializeEncryptedKey(ciphertext, pk, cipher, symKey, config); err != nil {
 			return nil, err
 		}
 	}
